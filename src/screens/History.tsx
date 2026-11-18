@@ -1,9 +1,10 @@
 import { useMemo, useState } from 'react'
-import { MuscleDot } from '../components/ExercisePicker'
+import { ExThumb } from '../components/ExerciseMedia'
+import { TechBadge } from '../components/TechniquePicker'
 import { Icon } from '../components/Icon'
 import { Empty, MenuItem, Sheet, TopBar, useNav } from '../components/ui'
 import { deleteWorkout, routineFromWorkout, updateWorkout, useApp, useExMap } from '../store'
-import { fmt, fmtDate, fmtDuration, fmtKg, fmtVolume, workoutSets, workoutVolume } from '../utils'
+import { fmt, fmtClock, fmtDate, fmtDuration, fmtKg, fmtVolume, workoutSets, workoutVolume } from '../utils'
 import { PR_LABEL } from './Workout'
 
 export function HistoryTab() {
@@ -118,7 +119,21 @@ export function WorkoutDetail({ id }: { id: string }) {
         </div>
       </div>
 
-      {w.notes && <p className="card note mt">📝 {w.notes}</p>}
+      {(() => {
+        const rests = w.exercises.flatMap((e) => e.sets.map((s) => s.rest ?? 0)).filter(Boolean)
+        return rests.length ? (
+          <p className="muted tiny mt-sm rest-summary">
+            Descanso médio {fmtClock(Math.round(rests.reduce((a, b) => a + b, 0) / rests.length))} · {rests.length} {rests.length > 1 ? 'descansos cronometrados' : 'descanso cronometrado'}
+          </p>
+        ) : null
+      })()}
+
+      {w.notes && (
+        <p className="card note mt">
+          <span className="label">Anotações</span>
+          {w.notes}
+        </p>
+      )}
 
       {!!w.prs?.length && (
         <div className="card mt pr-box">
@@ -141,11 +156,18 @@ export function WorkoutDetail({ id }: { id: string }) {
           return (
             <section key={e.id} className="card">
               <button className="row plain" onClick={() => nav.push({ name: 'exercise', id: e.exerciseId })}>
-                {ex && <MuscleDot muscle={ex.muscle} />}
-                <h3 className="grow">{ex?.name ?? 'Exercício removido'}</h3>
+                <ExThumb ex={ex} size={40} />
+                <h3 className="grow">
+                  {ex?.name ?? 'Exercício removido'} <TechBadge t={e.technique} />
+                </h3>
                 <Icon name="chart" size={18} className="muted" />
               </button>
-              {e.notes && <p className="ex-note">📝 {e.notes}</p>}
+              {e.notes && (
+                <p className="ex-note">
+                  <span className="label">Nota</span>
+                  {e.notes}
+                </p>
+              )}
               <table className="sets-table">
                 <tbody>
                   {e.sets.map((s) => (
@@ -154,7 +176,11 @@ export function WorkoutDetail({ id }: { id: string }) {
                       <td>
                         <b>{s.weight != null ? `${fmt(s.weight)} kg` : 'Peso corporal'}</b> × {s.reps}
                       </td>
-                      <td className="muted right">{s.rpe ? `RPE ${fmt(s.rpe)}` : ''}</td>
+                      <td className="muted right">
+                        {s.rpe ? `RPE ${fmt(s.rpe)}` : ''}
+                        {s.rpe && s.rest ? ' · ' : ''}
+                        {s.rest ? `desc. ${fmtClock(s.rest)}` : ''}
+                      </td>
                     </tr>
                   ))}
                 </tbody>

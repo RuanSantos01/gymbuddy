@@ -36,6 +36,12 @@ const paths: Record<string, string> = {
   info: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 11v5M12 8h.01',
   bolt: 'M13 2 4 14h7l-1 8 9-12h-7z',
   swap: 'M7 4 3 8l4 4M3 8h14M17 20l4-4-4-4M21 16H7',
+  stopwatch: 'M12 22a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM12 10v4M10 2h4M19 7l1.5-1.5',
+  pause: 'M8 5v14M16 5v14',
+  flag: 'M5 21V4M5 4h11l-2 4 2 4H5',
+  link: 'M10 14a4 4 0 0 0 5.66 0l3-3a4 4 0 0 0-5.66-5.66l-1 1M14 10a4 4 0 0 0-5.66 0l-3 3a4 4 0 0 0 5.66 5.66l1-1',
+  layers: 'M12 3 3 8l9 5 9-5zM3 13l9 5 9-5',
+  reset: 'M4 12a8 8 0 1 0 2.3-5.7L4 8.6M4 4v4.6h4.6',
 }
 
 export type IconName = keyof typeof paths

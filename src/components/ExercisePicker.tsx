@@ -3,6 +3,7 @@ import { MUSCLE_COLORS } from '../data/seed'
 import { saveExercise, useApp } from '../store'
 import { MUSCLES, type Exercise, type Muscle } from '../types'
 import { uid } from '../utils'
+import { ExThumb } from './ExerciseMedia'
 import { Icon } from './Icon'
 import { Sheet } from './ui'
 
@@ -98,8 +99,8 @@ export function ExercisePicker({ open, onClose, onPick, multi = true }: { open: 
           {f.list.map((e) => {
             const i = sel.indexOf(e.id)
             return (
-              <button key={e.id} className={`list-row${i >= 0 ? ' selected' : ''}`} onClick={() => toggle(e.id)}>
-                <MuscleDot muscle={e.muscle} />
+              <button key={e.id} className={`list-row ex-row${i >= 0 ? ' selected' : ''}`} onClick={() => toggle(e.id)}>
+                <ExThumb ex={e} size={52} />
                 <span className="grow">
                   {e.name}
                   <small>

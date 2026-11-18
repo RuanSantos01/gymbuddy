@@ -67,7 +67,7 @@ export function BodyScreen() {
             ))}
           </div>
           <section className="card mt-sm">
-            <LineChart points={series} color="var(--blue)" unit={metric === 'bodyFat' ? '%' : metric === 'weight' ? 'kg' : 'cm'} />
+            <LineChart points={series} color="var(--text)" unit={metric === 'bodyFat' ? '%' : metric === 'weight' ? 'kg' : 'cm'} />
           </section>
 
           <h2 className="section-title">Registros</h2>

@@ -81,7 +81,7 @@ export function Home() {
           <small className="muted">{fmtDate(now, { weekday: 'long', day: 'numeric', month: 'long' })}</small>
           <h1>
             {hello}
-            {settings.name ? `, ${settings.name}` : ''} 💪
+            {settings.name ? `, ${settings.name}` : ''}
           </h1>
         </div>
         <button className="icon-btn" onClick={() => nav.push({ name: 'settings' })} aria-label="Configurações">
@@ -111,7 +111,7 @@ export function Home() {
           <h3>Meta da semana</h3>
           <p className="muted">
             {stats.doneThisWeek >= settings.weeklyGoal
-              ? 'Meta batida! 🔥'
+              ? 'Meta da semana cumprida.'
               : `Faltam ${settings.weeklyGoal - stats.doneThisWeek} treino${settings.weeklyGoal - stats.doneThisWeek > 1 ? 's' : ''}`}
           </p>
           <div className="row gap-sm mt-sm wrap">

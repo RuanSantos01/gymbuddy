@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
-import { ExerciseForm, FilterBar, MuscleDot, useExerciseFilter } from '../components/ExercisePicker'
+import { ExerciseForm, FilterBar, useExerciseFilter } from '../components/ExercisePicker'
+import { ExThumb } from '../components/ExerciseMedia'
 import { Icon } from '../components/Icon'
 import { Empty, MenuItem, Segmented, Sheet, TopBar, useNav } from '../components/ui'
 import { deleteRoutine, saveRoutine, useApp, useExMap } from '../store'
@@ -125,8 +126,8 @@ function Library() {
       </button>
       <div className="list">
         {f.list.map((e) => (
-          <button key={e.id} className="list-row" onClick={() => nav.push({ name: 'exercise', id: e.id })}>
-            <MuscleDot muscle={e.muscle} />
+          <button key={e.id} className="list-row ex-row" onClick={() => nav.push({ name: 'exercise', id: e.id })}>
+            <ExThumb ex={e} size={52} />
             <span className="grow">
               {e.name}
               <small>
@@ -134,7 +135,7 @@ function Library() {
                 {e.custom ? ' · personalizado' : ''}
               </small>
             </span>
-            {counts.get(e.id) ? <span className="pill">{counts.get(e.id)}×</span> : null}
+            {counts.get(e.id) ? <span className="count">{counts.get(e.id)}×</span> : null}
             <Icon name="right" size={18} className="muted" />
           </button>
         ))}

@@ -15,6 +15,8 @@ export const defaultSettings: Settings = {
   sound: true,
   vibrate: true,
   keepAwake: true,
+  restMode: 'manual',
+  watchAutoStart: false,
 }
 
 function initial(): State {
@@ -27,14 +29,26 @@ function initial(): State {
     body: [],
     settings: { ...defaultSettings },
     rest: null,
+    watch: null,
+    removed: [],
   }
 }
 
 function hydrate(p: Partial<State>): State {
   const base = initial()
+  // exercícios novos da biblioteca entram para quem já usava o app
+  const have = new Set([...(p.exercises ?? []).map((e) => e.id), ...(p.removed ?? [])])
+  const exercises = p.exercises ? [...p.exercises, ...base.exercises.filter((e) => !have.has(e.id))] : base.exercises
+  // paleta antiga -> nova identidade visual
+  const OLD: Record<string, string> = { '#b4f53c': '#ff4d1f', '#4da3ff': '#e8e2d4', '#ff8a3d': '#7fa0a8', '#c77dff': '#9b8bb8', '#ff5d8f': '#c46a5a', '#2ee6c5': '#6f9a6a', '#ffd23f': '#d9a441', '#9aa4b2': '#8a8f98' }
+  const routines = p.routines?.map((r) => (OLD[r.color] ? { ...r, color: OLD[r.color] } : r))
   return {
     ...base,
     ...p,
+    ...(routines ? { routines } : {}),
+    exercises,
+    watch: p.watch ?? null,
+    removed: p.removed ?? [],
     version: 1,
     settings: { ...defaultSettings, ...(p.settings ?? {}) },
     workouts: [...(p.workouts ?? [])].sort((a, b) => b.startedAt - a.startedAt),
@@ -189,6 +203,8 @@ export function startWorkout(opts: { routine?: Routine; from?: Workout } = {}) {
       restSec: re.restSec,
       repMin: re.repMin,
       repMax: re.repMax,
+      technique: re.technique,
+      cadence: re.cadence,
       sets: Array.from({ length: re.sets }, () => newSet()),
     }))
   } else if (from) {
@@ -204,6 +220,7 @@ export function startWorkout(opts: { routine?: Routine; from?: Workout } = {}) {
   set({
     active: { id: uid(), name, routineId: routine?.id ?? from?.routineId, startedAt: Date.now(), exercises },
     rest: null,
+    watch: null,
   })
 }
 
@@ -221,15 +238,15 @@ export function finishWorkout(): Workout | null {
     .map((e) => ({ ...e, sets: e.sets.filter((s) => s.done && s.reps != null) }))
     .filter((e) => e.sets.length)
   if (!exercises.length) {
-    set({ active: null, rest: null })
+    set({ active: null, rest: null, watch: null })
     return null
   }
   const w: Workout = { ...a, exercises, finishedAt: Date.now(), prs: detectPRs(exercises, state.workouts) }
-  set({ workouts: [w, ...state.workouts].sort((x, y) => y.startedAt - x.startedAt), active: null, rest: null })
+  set({ workouts: [w, ...state.workouts].sort((x, y) => y.startedAt - x.startedAt), active: null, rest: null, watch: null })
   return w
 }
 
-export const discardWorkout = () => set({ active: null, rest: null })
+export const discardWorkout = () => set({ active: null, rest: null, watch: null })
 
 export const deleteWorkout = (id: string) => set((s) => ({ workouts: s.workouts.filter((w) => w.id !== id) }))
 
@@ -248,7 +265,7 @@ export function routineFromWorkout(w: Workout): Routine {
   const r: Routine = {
     id: uid(),
     name: w.name,
-    color: '#c77dff',
+    color: '#9b8bb8',
     exercises: w.exercises.map((e) => {
       const work = e.sets.filter(isWorking)
       const reps = work.map((s) => s.reps ?? 0)
@@ -258,6 +275,8 @@ export function routineFromWorkout(w: Workout): Routine {
         repMin: Math.max(1, Math.min(...reps, 8)),
         repMax: Math.max(...reps, 12),
         restSec: e.restSec,
+        technique: e.technique,
+        cadence: e.cadence,
       }
     }),
   }
@@ -274,6 +293,7 @@ export function saveExercise(ex: Exercise) {
 export const deleteExercise = (id: string) =>
   set((s) => ({
     exercises: s.exercises.filter((e) => e.id !== id),
+    removed: s.exercises.find((e) => e.id === id)?.custom ? s.removed : [...s.removed, id],
     routines: s.routines.map((r) => ({ ...r, exercises: r.exercises.filter((e) => e.exerciseId !== id) })),
   }))
 
@@ -297,6 +317,33 @@ export function adjustRest(delta: number) {
 }
 
 export const stopRest = () => set({ rest: null })
+
+/* ---------------- Cronômetro manual ---------------- */
+
+export const watchElapsed = (w: State['watch'], now = Date.now()) => (w ? w.acc + (w.startedAt ? now - w.startedAt : 0) : 0)
+
+export const watchStart = (target?: number) =>
+  set((s) => ({ watch: { startedAt: Date.now(), acc: s.watch && !s.watch.startedAt ? s.watch.acc : 0, target: target ?? s.watch?.target ?? s.settings.restDefault } }))
+
+export const watchPause = () => set((s) => (s.watch?.startedAt ? { watch: { ...s.watch, acc: watchElapsed(s.watch), startedAt: null } } : {}))
+
+export const watchReset = () => set({ watch: null })
+
+/** Para o cronômetro e grava o tempo como descanso da última série concluída. Retorna os segundos gravados. */
+export function watchMark(): number | null {
+  const w = state.watch
+  if (!w) return null
+  const sec = Math.round(watchElapsed(w) / 1000)
+  if (sec > 0) {
+    updateActive((a) => {
+      let last: WorkoutSet | null = null
+      for (const e of a.exercises) for (const s of e.sets) if (s.done && s.doneAt && (!last || s.doneAt > (last.doneAt ?? 0))) last = s
+      if (last) last.rest = sec
+    })
+  }
+  set({ watch: null })
+  return sec
+}
 
 export const exportData = () => JSON.stringify({ app: 'gymbuddy', exportedAt: new Date().toISOString(), ...state }, null, 2)
 

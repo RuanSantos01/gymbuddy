@@ -5,7 +5,7 @@ import { startRest, updateSettings, useApp } from '../store'
 import { e1rm, fmt, fmtRest, unlockAudio } from '../utils'
 
 const PLATES = [25, 20, 15, 10, 5, 2.5, 1.25]
-const PLATE_COLORS: Record<number, string> = { 25: '#ff5d5d', 20: '#4da3ff', 15: '#ffd23f', 10: '#2ee6c5', 5: '#e8eaed', 2.5: '#9aa4b2', 1.25: '#6b7280' }
+const PLATE_COLORS: Record<number, string> = { 25: '#ff4d1f', 20: '#7fa0a8', 15: '#d9a441', 10: '#6f9a6a', 5: '#efe9dc', 2.5: '#8a8478', 1.25: '#5f594f' }
 
 function platesFor(target: number, bar: number) {
   let side = (target - bar) / 2

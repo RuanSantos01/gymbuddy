@@ -200,15 +200,15 @@ export function Ring({ value, max, size = 76, children }: { value: number; max: 
   return (
     <div className="ring" style={{ width: size, height: size }}>
       <svg width={size} height={size}>
-        <circle cx={size / 2} cy={size / 2} r={r} stroke="var(--surface-3)" strokeWidth={8} fill="none" />
+        <circle cx={size / 2} cy={size / 2} r={r} stroke="var(--surface-3)" strokeWidth={6} fill="none" strokeDasharray="2 4" />
         <circle
           cx={size / 2}
           cy={size / 2}
           r={r}
           stroke="var(--accent)"
-          strokeWidth={8}
+          strokeWidth={6}
           fill="none"
-          strokeLinecap="round"
+          strokeLinecap="butt"
           strokeDasharray={c}
           strokeDashoffset={c * (1 - p)}
           transform={`rotate(-90 ${size / 2} ${size / 2})`}

@@ -22,6 +22,24 @@ export interface Exercise {
   notes?: string
 }
 
+export type Technique =
+  | 'tradicional'
+  | 'biset'
+  | 'triset'
+  | 'superserie'
+  | 'dropset'
+  | 'restpause'
+  | 'piramide-cresc'
+  | 'piramide-decresc'
+  | 'cluster'
+  | 'negativa'
+  | 'isometria'
+  | 'parciais'
+  | 'fst7'
+  | 'gvt'
+  | 'metodo21'
+  | 'unilateral'
+
 export type SetType = 'normal' | 'warmup' | 'drop' | 'failure'
 
 export interface WorkoutSet {
@@ -31,6 +49,10 @@ export interface WorkoutSet {
   rpe?: number | null
   type: SetType
   done: boolean
+  /** quando a série foi concluída (ms) */
+  doneAt?: number
+  /** descanso cronometrado depois desta série (s) */
+  rest?: number
 }
 
 export interface WorkoutExercise {
@@ -41,6 +63,8 @@ export interface WorkoutExercise {
   repMin?: number
   repMax?: number
   notes?: string
+  technique?: Technique
+  cadence?: string
 }
 
 export type PrKind = 'carga' | '1rm' | 'volume' | 'reps'
@@ -69,6 +93,8 @@ export interface RoutineExercise {
   repMin: number
   repMax: number
   restSec: number
+  technique?: Technique
+  cadence?: string
 }
 
 export interface Routine {
@@ -100,11 +126,24 @@ export interface Settings {
   sound: boolean
   vibrate: boolean
   keepAwake: boolean
+  /** manual: cronômetro que você controla · auto: contagem regressiva ao concluir a série */
+  restMode: 'manual' | 'auto'
+  /** no modo manual, iniciar o cronômetro sozinho ao concluir uma série */
+  watchAutoStart: boolean
 }
 
 export interface RestTimer {
   endsAt: number
   total: number
+}
+
+/** Cronômetro manual de descanso. running: startedAt definido */
+export interface Stopwatch {
+  startedAt: number | null
+  /** tempo acumulado antes do último início (ms) */
+  acc: number
+  /** descanso alvo do exercício, para referência (s) */
+  target: number
 }
 
 export interface State {
@@ -116,4 +155,7 @@ export interface State {
   body: BodyEntry[]
   settings: Settings
   rest: RestTimer | null
+  watch: Stopwatch | null
+  /** exercícios da biblioteca que a pessoa apagou (não voltam em atualizações) */
+  removed: string[]
 }

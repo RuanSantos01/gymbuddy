@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { LineChart, Sparkline } from '../components/Charts'
-import { ExerciseForm, MuscleDot } from '../components/ExercisePicker'
+import { ExerciseForm } from '../components/ExercisePicker'
+import { ExMotion, ExThumb } from '../components/ExerciseMedia'
 import { Icon } from '../components/Icon'
 import { Empty, Segmented, Stat, TopBar, useNav } from '../components/ui'
 import { deleteExercise, exerciseHistory, useApp, useExMap } from '../store'
@@ -43,7 +44,7 @@ export function ProgressTab() {
               : 'Registre peso, % gordura e medidas'}
           </small>
         </span>
-        <Sparkline values={weights.map((b) => b.weight!)} color="var(--blue)" />
+        <Sparkline values={weights.map((b) => b.weight!)} color="var(--text)" />
       </button>
 
       <h2 className="section-title">Exercícios</h2>
@@ -59,8 +60,8 @@ export function ProgressTab() {
             {rows.map((r) => {
               const ex = exMap.get(r.id)!
               return (
-                <button key={r.id} className="list-row" onClick={() => nav.push({ name: 'exercise', id: r.id })}>
-                  <MuscleDot muscle={ex.muscle} />
+                <button key={r.id} className="list-row ex-row" onClick={() => nav.push({ name: 'exercise', id: r.id })}>
+                  <ExThumb ex={ex} size={44} />
                   <span className="grow">
                     {ex.name}
                     <small>
@@ -127,7 +128,13 @@ export function ExerciseDetail({ id }: { id: string }) {
           </button>
         }
       />
-      {ex.notes && <p className="card note">💡 {ex.notes}</p>}
+      <ExMotion ex={ex} />
+      {ex.notes && (
+        <p className="card note mt-sm">
+          <span className="label">Execução</span>
+          {ex.notes}
+        </p>
+      )}
 
       {h.length === 0 ? (
         <Empty icon="chart" title="Ainda sem registros" text="Faça este exercício em um treino para ver sua evolução." />

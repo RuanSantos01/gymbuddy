@@ -1,8 +1,30 @@
-import { useEffect, useMemo, useState } from 'react'
-import { ExercisePicker, MuscleDot } from '../components/ExercisePicker'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { ExercisePicker } from '../components/ExercisePicker'
+import { ExMotion, ExThumb } from '../components/ExerciseMedia'
 import { Icon } from '../components/Icon'
+import { TechBadge, TechniquePicker } from '../components/TechniquePicker'
 import { MenuItem, NumInput, Sheet, useNav } from '../components/ui'
-import { adjustRest, discardWorkout, exName, stopRest, finishWorkout, lastSetsFor, newSet, startRest, suggest, updateActive, useApp, useExMap } from '../store'
+import { TECH, groupInfo } from '../data/techniques'
+import {
+  adjustRest,
+  discardWorkout,
+  exName,
+  finishWorkout,
+  getState,
+  lastSetsFor,
+  newSet,
+  startRest,
+  stopRest,
+  suggest,
+  updateActive,
+  useApp,
+  useExMap,
+  watchElapsed,
+  watchMark,
+  watchPause,
+  watchReset,
+  watchStart,
+} from '../store'
 import type { SetType, Workout, WorkoutExercise, WorkoutSet } from '../types'
 import { beep, fmt, fmtClock, fmtDuration, fmtKg, fmtRest, fmtVolume, unlockAudio, useNow, workoutSets, workoutVolume } from '../utils'
 import { REST_OPTIONS } from './RoutineEditor'
@@ -31,6 +53,8 @@ export function WorkoutScreen() {
       void lock?.release()
     }
   }, [settings.keepAwake])
+
+  const groups = useMemo(() => groupInfo(active?.exercises ?? []), [active?.exercises])
 
   if (!active) return null
   const w = active
@@ -89,7 +113,7 @@ export function WorkoutScreen() {
         )}
 
         {w.exercises.map((e, i) => (
-          <ExerciseBlock key={e.id} e={e} index={i} workouts={workouts} increment={settings.increment} onMenu={() => setExMenu(i)} onSetMenu={(s) => setSetMenu({ e: i, s })} />
+          <ExerciseBlock key={e.id} e={e} index={i} group={groups[i]} workouts={workouts} increment={settings.increment} onMenu={() => setExMenu(i)} onSetMenu={(s) => setSetMenu({ e: i, s })} />
         ))}
 
         <button className="btn block" onClick={() => setPicking({})}>
@@ -150,15 +174,34 @@ export function WorkoutScreen() {
         }
       >
         <p className="muted">
-          Há {total - done} série(s) não marcada(s) como concluída(s). Elas serão descartadas — só as séries com ✓ entram no histórico.
+          Há {total - done} série(s) não marcada(s) como concluída(s). Elas serão descartadas: só as séries marcadas como concluídas entram no histórico.
         </p>
       </Sheet>
     </div>
   )
 }
 
-function ExerciseBlock({ e, index, workouts, increment, onMenu, onSetMenu }: { e: WorkoutExercise; index: number; workouts: Workout[]; increment: number; onMenu: () => void; onSetMenu: (s: number) => void }) {
+type Group = ReturnType<typeof groupInfo>[number]
+
+function ExerciseBlock({
+  e,
+  index,
+  group,
+  workouts,
+  increment,
+  onMenu,
+  onSetMenu,
+}: {
+  e: WorkoutExercise
+  index: number
+  group: Group
+  workouts: Workout[]
+  increment: number
+  onMenu: () => void
+  onSetMenu: (s: number) => void
+}) {
   const exMap = useExMap()
+  const [info, setInfo] = useState(false)
   const ex = exMap.get(e.exerciseId)
   const prev = useMemo(() => lastSetsFor(workouts, e.exerciseId), [workouts, e.exerciseId])
   const prevWork = prev.filter((s) => s.type !== 'warmup')
@@ -180,26 +223,57 @@ function ExerciseBlock({ e, index, workouts, increment, onMenu, onSetMenu }: { e
     const s = e.sets[j]
     const willComplete = !s.done
     if (willComplete && s.reps == null && phR == null) return
+    const { settings, watch } = getState()
+    const manual = settings.restMode === 'manual'
+    // cronômetro rodando = você voltou do descanso: grava o tempo na série anterior
+    if (willComplete && manual && watch) watchMark()
     updateActive((x) => {
       const t = x.exercises[index].sets[j]
       if (!t.done) {
         if (t.weight == null) t.weight = phW
         if (t.reps == null) t.reps = phR
         t.done = true
-      } else t.done = false
+        t.doneAt = Date.now()
+      } else {
+        t.done = false
+        delete t.doneAt
+        delete t.rest
+      }
     })
-    if (willComplete) startRest(s.type === 'warmup' ? Math.min(60, e.restSec) : e.restSec)
+    if (!willComplete) return
+    // dentro de bi-set/tri-set, só descansa ao fim do bloco
+    const midGroup = group && group.pos < group.size
+    if (midGroup) return
+    const sec = s.type === 'warmup' ? Math.min(60, e.restSec) : e.restSec
+    if (!manual) startRest(sec)
+    else if (settings.watchAutoStart) watchStart(sec)
   }
 
+  const gClass = group ? ` grouped g-${group.pos === 1 ? 'first' : group.pos === group.size ? 'last' : 'mid'}` : ''
+  const tech = e.technique ? TECH[e.technique] : undefined
+
   return (
-    <section className={`card ex-block${allDone ? ' complete' : ''}`}>
-      <div className="row">
-        {ex && <MuscleDot muscle={ex.muscle} />}
+    <section className={`card ex-block${allDone ? ' complete' : ''}${gClass}`}>
+      {group?.pos === 1 && (
+        <div className="group-tag">
+          <Icon name="link" size={13} /> {group.label} · {group.size} exercícios sem descanso entre eles
+        </div>
+      )}
+      <div className="ex-head">
+        <ExThumb ex={ex} size={56} onClick={() => setInfo(true)} />
         <div className="grow">
+          <div className="ex-kicker">
+            <span className="ex-index">{String(index + 1).padStart(2, '0')}</span>
+            {ex?.muscle}
+            {group && <span className="g-pos">{group.code} {group.pos}/{group.size}</span>}
+            {!group && <TechBadge t={e.technique} onClick={() => setInfo(true)} />}
+          </div>
           <h3 className="ex-title">{ex?.name ?? 'Exercício removido'}</h3>
-          <small className="muted">
+          <small className="muted ex-meta">
             {ex?.equipment}
-            {e.repMin && e.repMax ? ` · meta ${e.repMin}–${e.repMax} reps` : ''} · <Icon name="timer" size={12} /> {fmtRest(e.restSec)}
+            {e.repMin && e.repMax ? ` · ${e.repMin}–${e.repMax} reps` : ''}
+            {group && group.pos < group.size ? ' · sem descanso' : ` · ${fmtRest(e.restSec)}`}
+            {e.cadence ? ` · cad. ${e.cadence}` : ''}
           </small>
         </div>
         <button className="icon-btn" onClick={onMenu} aria-label="Opções do exercício">
@@ -221,8 +295,12 @@ function ExerciseBlock({ e, index, workouts, increment, onMenu, onSetMenu }: { e
           )}
         </div>
       )}
-      {e.notes ? <p className="ex-note">📝 {e.notes}</p> : null}
-      {ex?.notes ? <p className="ex-note muted">💡 {ex.notes}</p> : null}
+      {e.notes ? (
+        <p className="ex-note">
+          <span className="label">Nota</span>
+          {e.notes}
+        </p>
+      ) : null}
 
       <div className="set-head">
         <span>Série</span>
@@ -232,20 +310,57 @@ function ExerciseBlock({ e, index, workouts, increment, onMenu, onSetMenu }: { e
         <span />
       </div>
       {rows.map(({ s, j, label, p, phW, phR }) => (
-        <SetRow key={s.id} s={s} label={label} prev={p} phW={phW} phR={phR} index={index} j={j} onToggle={() => toggle(j, phW, phR)} onMenu={() => onSetMenu(j)} />
+        <div key={s.id}>
+          <SetRow s={s} label={label} prev={p} phW={phW} phR={phR} index={index} j={j} onToggle={() => toggle(j, phW, phR)} onMenu={() => onSetMenu(j)} />
+          {s.rest ? (
+            <div className="rest-mark">
+              <Icon name="stopwatch" size={12} /> descanso {fmtClock(s.rest)}
+              {s.rest > e.restSec + 15 && <em> +{fmtClock(s.rest - e.restSec)}</em>}
+            </div>
+          ) : null}
+        </div>
       ))}
-      <button
-        className="btn ghost block sm mt-sm"
-        onClick={() =>
-          updateActive((x) => {
-            const sets = x.exercises[index].sets
-            const last = sets[sets.length - 1]
-            sets.push({ ...newSet(last?.type === 'warmup' ? 'normal' : last?.type ?? 'normal') })
-          })
-        }
-      >
-        <Icon name="plus" size={16} /> Série
-      </button>
+      <div className="row gap-sm mt-sm">
+        <button
+          className="btn ghost sm grow"
+          onClick={() =>
+            updateActive((x) => {
+              const sets = x.exercises[index].sets
+              const last = sets[sets.length - 1]
+              sets.push({ ...newSet(last?.type === 'warmup' ? 'normal' : last?.type ?? 'normal') })
+            })
+          }
+        >
+          <Icon name="plus" size={16} /> Série
+        </button>
+        {e.technique === 'dropset' && (
+          <button className="btn ghost sm grow" onClick={() => updateActive((x) => void x.exercises[index].sets.push(newSet('drop')))}>
+            <Icon name="arrowDown" size={16} /> Drop
+          </button>
+        )}
+      </div>
+
+      <Sheet open={info} onClose={() => setInfo(false)} title={ex?.name}>
+        <ExMotion ex={ex} />
+        <p className="muted tiny mt-sm">
+          {ex?.muscle} · {ex?.equipment}
+        </p>
+        {tech && tech.id !== 'tradicional' && (
+          <div className="tech-how mt">
+            <span className="label">
+              {tech.label}
+              {e.cadence ? ` · cadência ${e.cadence}` : ''}
+            </span>
+            <p>{tech.how}</p>
+          </div>
+        )}
+        {ex?.notes && (
+          <div className="tech-how mt">
+            <span className="label">Suas dicas de execução</span>
+            <p>{ex.notes}</p>
+          </div>
+        )}
+      </Sheet>
     </section>
   )
 }
@@ -270,9 +385,25 @@ function SetRow({ s, label, prev, phW, phR, index, j, onToggle, onMenu }: { s: W
 function ExerciseMenu({ index, w, onClose, onReplace }: { index: number | null; w: Workout; onClose: () => void; onReplace: (i: number) => void }) {
   const exMap = useExMap()
   const [notes, setNotes] = useState<string | null>(null)
+  const [tech, setTech] = useState(false)
   if (index == null) return null
   const e = w.exercises[index]
   if (!e) return null
+  if (tech)
+    return (
+      <TechniquePicker
+        open
+        value={e.technique}
+        cadence={e.cadence}
+        onClose={() => (setTech(false), onClose())}
+        onChange={(t, c) =>
+          updateActive((x) => {
+            x.exercises[index].technique = t
+            x.exercises[index].cadence = c
+          })
+        }
+      />
+    )
   const move = (d: number) =>
     updateActive((x) => {
       const j = index + d
@@ -314,6 +445,12 @@ function ExerciseMenu({ index, w, onClose, onReplace }: { index: number | null; 
               ))}
             </div>
           </div>
+          <MenuItem
+            icon="layers"
+            label="Técnica de execução"
+            sub={`${TECH[e.technique ?? 'tradicional'].label}${e.cadence ? ` · cadência ${e.cadence}` : ''}`}
+            onClick={() => setTech(true)}
+          />
           <MenuItem icon="note" label="Anotação" sub={e.notes || undefined} onClick={() => setNotes(e.notes ?? '')} />
           <MenuItem icon="plus" label="Adicionar série de aquecimento" onClick={() => (updateActive((x) => void x.exercises[index].sets.unshift(newSet('warmup'))), onClose())} />
           <MenuItem icon="swap" label="Substituir exercício" onClick={() => onReplace(index)} />
@@ -386,6 +523,18 @@ function SetMenu({ target, w, onClose }: { target: { e: number; s: number } | nu
 /* ---------------- Barra de descanso ---------------- */
 
 export function RestBar({ raised }: { raised: boolean }) {
+  const { settings, active, watch } = useApp()
+  const dock = settings.restMode === 'manual' && !!active
+  // a contagem regressiva continua disponível (timer das Ferramentas) mesmo no modo manual
+  return (
+    <>
+      {dock && <WatchDock raised={raised} />}
+      <Countdown raised={raised} stacked={dock && (!raised || !!watch)} />
+    </>
+  )
+}
+
+function Countdown({ raised, stacked }: { raised: boolean; stacked?: boolean }) {
   const { rest, settings } = useApp()
   const now = useNow(250)
   const remaining = rest ? Math.ceil((rest.endsAt - now) / 1000) : 0
@@ -401,7 +550,7 @@ export function RestBar({ raised }: { raised: boolean }) {
   if (!rest || remaining <= 0) return null
   const pct = Math.max(0, Math.min(1, (rest.endsAt - now) / (rest.total * 1000)))
   return (
-    <div className={`restbar${raised ? ' raised' : ''}`}>
+    <div className={`restbar${raised ? ' raised' : ''}${stacked ? ' stacked' : ''}`}>
       <div className="restbar-fill" style={{ width: `${pct * 100}%` }} />
       <div className="restbar-content">
         <span className="restbar-label">Descanso</span>
@@ -412,6 +561,98 @@ export function RestBar({ raised }: { raised: boolean }) {
           <button className="skip" onClick={stopRest}>
             Pular
           </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/** Descanso alvo do exercício da última série concluída. */
+function lastTarget(w: Workout | null, fallback: number) {
+  let best: { at: number; rest: number } | null = null
+  for (const e of w?.exercises ?? []) for (const s of e.sets) if (s.done && s.doneAt && (!best || s.doneAt > best.at)) best = { at: s.doneAt, rest: e.restSec }
+  return best?.rest ?? fallback
+}
+
+/** Cronômetro de descanso que você controla: iniciar, pausar, marcar. */
+function WatchDock({ raised }: { raised: boolean }) {
+  const { watch, settings, active } = useApp()
+  const now = useNow(200)
+  const [flash, setFlash] = useState<string | null>(null)
+  const alerted = useRef(false)
+  const ms = watchElapsed(watch, now)
+  const sec = Math.floor(ms / 1000)
+  const running = !!watch?.startedAt
+  const target = watch?.target ?? lastTarget(active, settings.restDefault)
+  const over = sec >= target
+
+  useEffect(() => {
+    if (!watch) alerted.current = false
+    else if (running && over && !alerted.current) {
+      alerted.current = true
+      if (settings.vibrate) navigator.vibrate?.([200, 100, 200])
+      if (settings.sound) beep()
+    }
+  }, [watch, running, over, settings.vibrate, settings.sound])
+
+  useEffect(() => {
+    if (!flash) return
+    const t = setTimeout(() => setFlash(null), 2200)
+    return () => clearTimeout(t)
+  }, [flash])
+
+  // fora da tela de treino, só aparece com o cronômetro em uso
+  if (raised && !watch) return null
+
+  const mark = () => {
+    const s = watchMark()
+    if (s) setFlash(`Descanso de ${fmtClock(s)} registrado`)
+  }
+
+  return (
+    <div className={`watch${raised ? ' raised' : ''}${running ? ' running' : ''}${over ? ' over' : ''}`}>
+      <div className="watch-track">
+        <div style={{ width: `${Math.min(1, ms / 1000 / target) * 100}%` }} />
+      </div>
+      <div className="watch-body">
+        <div className="watch-read">
+          <span className="watch-label">{flash ?? (watch ? (running ? (over ? 'Meta de descanso atingida' : 'Descansando') : 'Pausado') : 'Cronômetro de descanso')}</span>
+          <strong>{fmtClock(sec)}</strong>
+          <small>meta {fmtClock(target)}</small>
+        </div>
+        <div className="watch-actions">
+          {!watch && (
+            <button
+              className="w-btn primary"
+              onClick={() => {
+                unlockAudio()
+                watchStart(lastTarget(active, settings.restDefault))
+              }}
+            >
+              <Icon name="play" size={16} /> Iniciar
+            </button>
+          )}
+          {watch && (
+            <>
+              {running ? (
+                <button className="w-btn" onClick={watchPause} aria-label="Pausar">
+                  <Icon name="pause" size={18} stroke={2.6} />
+                </button>
+              ) : (
+                <>
+                  <button className="w-btn" onClick={watchReset} aria-label="Zerar">
+                    <Icon name="reset" size={18} />
+                  </button>
+                  <button className="w-btn" onClick={() => watchStart()} aria-label="Retomar">
+                    <Icon name="play" size={16} />
+                  </button>
+                </>
+              )}
+              <button className="w-btn primary" onClick={mark}>
+                <Icon name="flag" size={16} /> Marcar
+              </button>
+            </>
+          )}
         </div>
       </div>
     </div>
@@ -480,7 +721,7 @@ export function Summary({ w, onClose }: { w: Workout | null; onClose: () => void
         </div>
         {w.prs && w.prs.length > 0 && (
           <div className="mt">
-            <h3 className="section-title">🏆 Novos recordes ({w.prs.length})</h3>
+            <h3 className="section-title">Novos recordes ({w.prs.length})</h3>
             <div className="list">
               {w.prs.map((p, i) => (
                 <div key={i} className="list-row static">

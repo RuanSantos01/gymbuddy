@@ -1,6 +1,9 @@
-import { useState } from 'react'
-import { ExercisePicker, MuscleDot } from '../components/ExercisePicker'
+import { useMemo, useState } from 'react'
+import { ExercisePicker } from '../components/ExercisePicker'
+import { ExThumb } from '../components/ExerciseMedia'
 import { Icon } from '../components/Icon'
+import { TechniquePicker } from '../components/TechniquePicker'
+import { TECH, groupInfo } from '../data/techniques'
 import { NumInput, Stepper, TopBar, useNav } from '../components/ui'
 import { ROUTINE_COLORS } from '../data/seed'
 import { deleteRoutine, getState, saveRoutine, useApp, useExMap } from '../store'
@@ -18,6 +21,8 @@ export function RoutineEditor({ id }: { id?: string }) {
     return existing ? structuredClone(existing) : { id: uid(), name: '', color: ROUTINE_COLORS[getState().routines.length % ROUTINE_COLORS.length], exercises: [] }
   })
   const [picking, setPicking] = useState(false)
+  const [techIdx, setTechIdx] = useState<number | null>(null)
+  const groups = useMemo(() => groupInfo(r.exercises), [r.exercises])
   const isNew = !id
 
   const upd = (i: number, patch: Partial<Routine['exercises'][number]>) =>
@@ -64,10 +69,16 @@ export function RoutineEditor({ id }: { id?: string }) {
       <div className="stack">
         {r.exercises.map((e, i) => {
           const ex = exMap.get(e.exerciseId)
+          const g = groups[i]
           return (
-            <div key={`${e.exerciseId}-${i}`} className="card tight">
+            <div key={`${e.exerciseId}-${i}`} className={`card tight${g ? ` grouped g-${g.pos === 1 ? 'first' : g.pos === g.size ? 'last' : 'mid'}` : ''}`}>
+              {g?.pos === 1 && (
+                <div className="group-tag">
+                  <Icon name="link" size={13} /> {g.label} · {g.size} exercícios em sequência
+                </div>
+              )}
               <div className="row">
-                {ex && <MuscleDot muscle={ex.muscle} />}
+                <ExThumb ex={ex} size={44} />
                 <strong className="grow">
                   {ex?.name ?? 'Removido'} <small className="muted">{ex?.equipment}</small>
                 </strong>
@@ -105,6 +116,14 @@ export function RoutineEditor({ id }: { id?: string }) {
                   </select>
                 </div>
               </div>
+              <button className="tech-row" onClick={() => setTechIdx(i)}>
+                <Icon name="layers" size={16} />
+                <span className="grow">
+                  Técnica: <b>{TECH[e.technique ?? 'tradicional'].label}</b>
+                  {e.cadence ? ` · cadência ${e.cadence}` : ''}
+                </span>
+                <Icon name="right" size={16} />
+              </button>
             </div>
           )
         })}
@@ -125,6 +144,16 @@ export function RoutineEditor({ id }: { id?: string }) {
         >
           <Icon name="trash" size={18} /> Excluir rotina
         </button>
+      )}
+
+      {techIdx != null && r.exercises[techIdx] && (
+        <TechniquePicker
+          open
+          value={r.exercises[techIdx].technique}
+          cadence={r.exercises[techIdx].cadence}
+          onClose={() => setTechIdx(null)}
+          onChange={(t, c) => upd(techIdx, { technique: t, cadence: c })}
+        />
       )}
 
       <ExercisePicker
